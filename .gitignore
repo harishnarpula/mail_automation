@@ -1,0 +1,54 @@
+# Java
+*.class
+*.jar
+*.war
+*.ear
+
+# Maven
+/target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# Gradle
+.gradle/
+build/
+
+# IntelliJ IDEA
+.idea/
+*.iml
+*.iws
+out/
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+
+# OS generated
+.DS_Store
+Thumbs.db
+
+# Environment files
+.env
+
+# Sensitive config
+src/main/resources/application-local.properties
+src/main/resources/application-dev.properties
+
+# Misc
+*.swp
+*.swo
+
+# Ignore test output
+/test-output/
+
+# Ignore database files
+*.h2.db
+*.mv.db
+
+# Ignore coverage reports
+coverage/
+
+# Ignore node_modules if any
+node_modules/
+
