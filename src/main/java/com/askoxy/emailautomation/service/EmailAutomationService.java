@@ -1,7 +1,7 @@
 package com.askoxy.emailautomation.service;
 
 import com.askoxy.emailautomation.agent.*;
-import com.askoxy.emailautomation.dto.EmailAutomationResponse;
+import com.askoxy.emailautomation.dto.EmailAutomationDto;
 import com.askoxy.emailautomation.dto.GeneratedEmailDto;
 import com.askoxy.emailautomation.entity.EmailApprovalSession;
 import com.askoxy.emailautomation.entity.UploadedFile;
@@ -31,7 +31,7 @@ public class EmailAutomationService {
     private final ComplianceAgent complianceAgent;
 
     @Transactional
-    public EmailAutomationResponse startCampaign(String clientName, String clientEmail) {
+    public EmailAutomationDto startCampaign(String clientName, String clientEmail) {
 
         // 1. Auto-resolve the most recently uploaded COMPLETED file
         UploadedFile uploadedFile = uploadedFileRepository
@@ -76,7 +76,7 @@ public class EmailAutomationService {
 
         log.info("[Campaign] Pending admin approval for clientEmail={}", clientEmail);
 
-        return EmailAutomationResponse.builder()
+        return EmailAutomationDto.builder()
                 .success(true)
                 .message("Email generated and sent to admin for WhatsApp approval")
                 .clientEmail(clientEmail)

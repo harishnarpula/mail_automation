@@ -1,0 +1,129 @@
+spring:
+  application:
+    name: askoxy-email-automation
+
+    jmx:
+      enabled: false
+
+  servlet:
+    multipart:
+      max-file-size: 500MB
+      max-request-size: 500MB
+
+  datasource:
+    url: jdbc:postgresql://dpg-d8470ofaqgkc73adpk6g-a.oregon-postgres.render.com:5432/radha_ai
+    username: radha_ai_user
+    password: vKfXPbeFasUD1PwLSmwQDAPTpka0kTX1
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+
+  ai:
+    openai:
+      api-key: ${OPENAI_API_KEY}
+      chat:
+        options:
+          model: gpt-4o
+          max-tokens: 4096
+          temperature: 0.7
+      embedding:
+        options:
+          model: text-embedding-3-small
+    ollama:
+      chat:
+        enabled: false
+      embedding:
+        enabled: false
+    vectorstore:
+      qdrant:
+        host: ${QDRANT_HOST}
+        port: ${QDRANT_PORT}
+        api-key: ${QDRANT_API_KEY}
+        collection-name: askoxycollection
+        initialize-schema: true
+        use-tls: true
+    anthropic:
+      api-key: DISABLED
+
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: venagantirishi@gmail.com
+    password: usbo jtyu bbjp hjwr
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+
+app:
+  gmail:
+    imap:
+      host: imap.gmail.com
+      port: 993
+      password: sxzf mgbr sjqq cwcs
+    poll-interval-ms: 60000
+  email:
+    from-name: AskOxy Team
+
+ultramsg:
+  instance-id: instance176023
+  api-url: https://api.ultramsg.com/instance176023/messages/chat
+  token: 6jpsb7azyyu1cjwo
+  admin-number: 919849257032
+
+useronboard:
+  mail:
+    host: ${spring.mail.host}
+    port: ${spring.mail.port}
+    username: ${spring.mail.username}
+    password: ${spring.mail.password}
+  qdrant:
+    host: ${spring.ai.vectorstore.qdrant.host}
+    port: ${spring.ai.vectorstore.qdrant.port}
+    api-key: ${spring.ai.vectorstore.qdrant.api-key}
+    collection-name: ${spring.ai.vectorstore.qdrant.collection-name}
+    use-tls: ${spring.ai.vectorstore.qdrant.use-tls}
+
+radhaclone:
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: siddushiva2699@gmail.com
+    password: upzw endy nhuu htag
+  qdrant:
+    host: ${QDRANT_HOST:localhost}
+    port: ${QDRANT_PORT:6334}
+    api-key: ${QDRANT_API_KEY:}
+    collection-name: askoxy_live
+    use-tls: true
+
+server:
+  forward-headers-strategy: framework
+
+radha:
+  email:
+    from: siddushiva2699@gmail.com
+    to: bsudheesh123@gmail.com
+  n8n:
+    enabled: true
+    webhook-base-url: http://localhost:5678/webhook-test
+
+gemini:
+  api:
+    key: AIzaSyCtOA1KiqxAGhb71srDoLz5KBp97fHuTeI
+
+management:
+  health:
+    redis:
+      enabled: false
+aws:
+  s3:
+    bucket: radha-clone
+    region: ap-south-1
+    access-key: ${AWS_ACCESS_KEY_ID}
+    secret-key: ${AWS_SECRET_ACCESS_KEY}
+    presigned-url-expiry-days: 7

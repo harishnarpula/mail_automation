@@ -1,28 +1,32 @@
 package com.askoxy.emailautomation.service;
 
-import com.askoxy.emailautomation.dto.PdfUploadResponse;
+import com.askoxy.emailautomation.dto.UploadResponse;
 import com.askoxy.emailautomation.dto.DocumentChunk;
 import com.askoxy.emailautomation.entity.UploadedFile;
 import com.askoxy.emailautomation.repository.UploadedFileRepository;
 import com.github.f4b6a3.uuid.UuidCreator;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.ai.document.Document;
+import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 
 @Slf4j
 @Service
 @RequiredArgsConstructor
 public class PdfIngestionService {
 
-    private final PdfExtractionService pdfExtractionService;
+    private final DocumentService documentService;
     private final ChunkingService chunkingService;
-    private final QdrantStorageService qdrantStorageService;
+    private final VectorStore vectorStore;
     private final UploadedFileRepository uploadedFileRepository;
 
-    public PdfUploadResponse ingest(MultipartFile file) {
+    public UploadResponse ingest(MultipartFile file) {
 
         String fileId = "FILE-" + UuidCreator.getTimeOrderedEpoch()
                 .toString().substring(0, 12).toUpperCase();
@@ -39,7 +43,7 @@ public class PdfIngestionService {
 
         try {
             // --- Step 2: Extract ---
-            String extractedText = pdfExtractionService.extract(file);
+            String extractedText = documentService.extractText(file);
             if (extractedText == null || extractedText.isBlank()) {
                 throw new IllegalArgumentException("No readable text found in PDF.");
             }
@@ -52,9 +56,27 @@ public class PdfIngestionService {
             uploadedFileRepository.save(uploadedFile);
 
             // --- Step 4: Store in Qdrant ---
-            List<String> chunkTexts = chunks.stream()
-                    .map(DocumentChunk::getChunkText).toList();
-            String vectorStoreId = qdrantStorageService.store(fileId, chunkTexts);
+            if (chunks.isEmpty()) {
+                throw new IllegalArgumentException("No chunks available to store in Qdrant.");
+            }
+
+            String vectorStoreId = UUID.randomUUID().toString();
+
+            List<Document> documents = chunks.stream()
+                    .map(DocumentChunk::getChunkText)
+                    .filter(chunk -> chunk != null && !chunk.isBlank())
+                    .map(chunk -> new Document(chunk, Map.of(
+                            "fileId", fileId,
+                            "vectorStoreId", vectorStoreId
+                    )))
+                    .toList();
+
+            if (documents.isEmpty()) {
+                throw new IllegalArgumentException("All chunks were empty after filtering; nothing to index.");
+            }
+
+            vectorStore.add(documents);
+            log.info("Stored {} chunks in Qdrant, vectorStoreId={}", documents.size(), vectorStoreId);
 
             uploadedFile.setVectorStoreId(vectorStoreId);
             uploadedFile.setTotalChunks(chunks.size());
@@ -63,12 +85,14 @@ public class PdfIngestionService {
 
             log.info("[PdfIngestion] Completed fileId={} chunks={}", fileId, chunks.size());
 
-            return PdfUploadResponse.builder()
+            return UploadResponse.builder()
                     .success(true)
                     .message("PDF uploaded and indexed successfully")
                     .fileId(fileId)
                     .fileName(file.getOriginalFilename())
                     .totalChunks(chunks.size())
+                    .chunksStored(chunks.size())
+                    .status("COMPLETED")
                     .build();
 
         } catch (Exception ex) {

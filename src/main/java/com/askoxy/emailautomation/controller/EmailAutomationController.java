@@ -1,8 +1,8 @@
 package com.askoxy.emailautomation.controller;
 
 import com.askoxy.emailautomation.dto.CampaignRequest;
-import com.askoxy.emailautomation.dto.EmailAutomationResponse;
-import com.askoxy.emailautomation.dto.PdfUploadResponse;
+import com.askoxy.emailautomation.dto.EmailAutomationDto;
+import com.askoxy.emailautomation.dto.UploadResponse;
 import com.askoxy.emailautomation.service.EmailAutomationService;
 import com.askoxy.emailautomation.service.PdfIngestionService;
 import lombok.RequiredArgsConstructor;
@@ -30,21 +30,21 @@ public class EmailAutomationController {
     private final EmailAutomationService emailAutomationService;
 
     @PostMapping("/pdf/upload")
-    public ResponseEntity<PdfUploadResponse> uploadPdf(
+    public ResponseEntity<UploadResponse> uploadPdf(
             @RequestParam("file") MultipartFile file) {
 
         log.info("[Controller] PDF upload request - fileName={}", file.getOriginalFilename());
-        PdfUploadResponse response = pdfIngestionService.ingest(file);
+        UploadResponse response = pdfIngestionService.ingest(file);
         return ResponseEntity.ok(response);
     }
 
     @PostMapping("/email/send-campaign")
-    public ResponseEntity<EmailAutomationResponse> sendCampaign(
+    public ResponseEntity<EmailAutomationDto> sendCampaign(
             @RequestBody CampaignRequest request) {
 
         log.info("[Controller] Campaign request — client={}", request.getClientEmail());
 
-        EmailAutomationResponse response = emailAutomationService.startCampaign(
+        EmailAutomationDto response = emailAutomationService.startCampaign(
                 request.getClientName(),
                 request.getClientEmail()
         );

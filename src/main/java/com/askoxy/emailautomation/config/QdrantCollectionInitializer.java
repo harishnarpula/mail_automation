@@ -13,16 +13,16 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class QdrantCollectionInitializer {
 
-    @Value("${spring.ai.vectorstore.qdrant.host}")
+    @Value("${useronboard.qdrant.host}")
     private String host;
 
-    @Value("${spring.ai.vectorstore.qdrant.port}")
+    @Value("${useronboard.qdrant.port}")
     private String port;
 
-    @Value("${spring.ai.vectorstore.qdrant.api-key}")
+    @Value("${useronboard.qdrant.api-key}")
     private String apiKey;
 
-    @Value("${spring.ai.vectorstore.qdrant.collection-name}")
+    @Value("${useronboard.qdrant.collection-name}")
     private String collectionName;
 
     private final RestTemplate restTemplate = new RestTemplate();
