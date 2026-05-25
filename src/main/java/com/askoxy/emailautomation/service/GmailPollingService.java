@@ -55,7 +55,8 @@ public class GmailPollingService {
 
     @Scheduled(fixedDelayString = "${app.gmail.poll-interval-ms:60000}")
     public void pollInbox() {
-        log.debug("[GmailPoller] Starting inbox poll...");
+        log.info("[GmailPoller] Polling inbox for account={} lookbackHours={} intervalMs={}",
+                ourEmailAddress, lookbackHours, pollIntervalMs);
         Store store = null;
         Folder inbox = null;
 
@@ -71,7 +72,7 @@ public class GmailPollingService {
             Message[] messages    = inbox.search(combined);
 
             if (messages == null || messages.length == 0) {
-                log.debug("[GmailPoller] No unread messages in last {} hours.", lookbackHours);
+                log.info("[GmailPoller] No unread messages in last {} hours.", lookbackHours);
                 return;
             }
 

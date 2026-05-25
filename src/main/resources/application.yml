@@ -120,6 +120,14 @@ management:
   health:
     redis:
       enabled: false
+logging:
+  level:
+    root: INFO
+    com.askoxy.emailautomation.service.GmailPollingService: DEBUG
+    com.askoxy.emailautomation.service.ClientReplyProcessorService: DEBUG
+    org.springframework.scheduling: INFO
+  file:
+    name: logs/mail-automation.log
 aws:
   s3:
     bucket: radha-clone
