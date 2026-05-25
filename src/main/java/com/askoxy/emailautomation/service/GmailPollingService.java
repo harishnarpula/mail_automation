@@ -1,5 +1,6 @@
 package com.askoxy.emailautomation.service;
 
+import com.askoxy.emailautomation.entity.EmailApprovalSession;
 import com.askoxy.emailautomation.repository.EmailApprovalSessionRepository;
 import jakarta.mail.*;
 import jakarta.mail.internet.InternetAddress;
@@ -16,29 +17,11 @@ import org.springframework.stereotype.Service;
 
 import java.io.IOException;
 import java.util.Date;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-/**
- * Polls Gmail via IMAP on a fixed schedule to detect client replies.
- *
- * KEY FIXES:
- * 1. Fetches recent messages received in the last N hours (seen/unseen).
- * 2. Validates In-Reply-To header matches a Message-ID WE sent (sentMessageId in DB).
- * 3. Falls back to time-based session check if sentMessageId is not tracked yet.
- *
- * Flow:
- *   1. Connect to Gmail IMAP using App Password
- *   2. Fetch UNSEEN messages received in the last 24 hours only
- *   3. Skip messages with no In-Reply-To header (not a reply at all)
- *   4. Validate In-Reply-To matches an email WE sent (via sentMessageId DB lookup)
- *   5. Skip messages sent by ourselves (outbound echoes)
- *   6. Skip already-processed Message-IDs (idempotency)
- *   7. Skip if no APPROVED session exists for this sender (NULL-SAFE lookup)
- *   8. Hand off to ClientReplyProcessorService for agent pipeline + admin approval
- *   9. Mark the message as SEEN so it's not re-processed next poll
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -46,8 +29,6 @@ public class GmailPollingService {
 
     private final ClientReplyProcessorService clientReplyProcessorService;
     private final EmailApprovalSessionRepository sessionRepository;
-
-    // ── Config ────────────────────────────────────────────────────────────────
 
     @Value("${app.gmail.imap.host:imap.gmail.com}")
     private String imapHost;
@@ -64,18 +45,13 @@ public class GmailPollingService {
     @Value("${app.gmail.poll-interval-ms:60000}")
     private long pollIntervalMs;
 
-    // How many hours back to look for emails (default: 24 hours)
     @Value("${app.gmail.lookback-hours:24}")
     private int lookbackHours;
 
-    // How many days back a campaign session must be to be considered valid
     @Value("${app.gmail.campaign-validity-days:7}")
     private int campaignValidityDays;
 
-    // ── In-memory idempotency guard ───────────────────────────────────────────
     private final Set<String> processedMessageIds = ConcurrentHashMap.newKeySet();
-
-    // ── Scheduled Poller ──────────────────────────────────────────────────────
 
     @Scheduled(fixedDelayString = "${app.gmail.poll-interval-ms:60000}")
     public void pollInbox() {
@@ -88,13 +64,11 @@ public class GmailPollingService {
             inbox = store.getFolder("INBOX");
             inbox.open(Folder.READ_WRITE);
 
-            // ── CRITICAL FIX #1: Only search UNSEEN + received within last N hours ──
             Date cutoff = new Date(System.currentTimeMillis() - (lookbackHours * 60L * 60L * 1000L));
-
             SearchTerm unseenTerm = new FlagTerm(new Flags(Flags.Flag.SEEN), false);
             SearchTerm dateTerm   = new ReceivedDateTerm(jakarta.mail.search.ComparisonTerm.GE, cutoff);
             SearchTerm combined   = new AndTerm(unseenTerm, dateTerm);
-            Message[] messages = inbox.search(combined);
+            Message[] messages    = inbox.search(combined);
 
             if (messages == null || messages.length == 0) {
                 log.debug("[GmailPoller] No unread messages in last {} hours.", lookbackHours);
@@ -120,16 +94,16 @@ public class GmailPollingService {
         }
     }
 
-    // ── Message Processing ────────────────────────────────────────────────────
-
     private void processMessage(Message message) throws MessagingException, IOException {
 
-        String messageId  = normalizeMessageId(getHeader(message, "Message-ID"));
-        String inReplyTo  = normalizeMessageId(getHeader(message, "In-Reply-To"));
+        String messageId = normalizeMessageId(getHeader(message, "Message-ID"));
+        String inReplyTo = normalizeMessageId(getHeader(message, "In-Reply-To"));
         String references = getHeader(message, "References");
-        String subject    = message.getSubject() != null ? message.getSubject().trim() : "(no subject)";
+        String subject   = message.getSubject() != null ? message.getSubject().trim() : "(no subject)";
 
-        // ── GUARD 1: Must have In-Reply-To (must be an actual reply email) ────
+        log.debug("[GmailPoller] Processing — messageId={} inReplyTo={} subject={}", messageId, inReplyTo, subject);
+
+        // ── GUARD 1: Must be an actual reply ─────────────────────────────────
         if (inReplyTo == null || inReplyTo.isBlank()) {
             log.debug("[GmailPoller] Skipping non-reply (no In-Reply-To). subject={}", subject);
             markAsSeen(message);
@@ -151,29 +125,64 @@ public class GmailPollingService {
             return;
         }
 
-        // ── GUARD 4: CRITICAL FIX #2 — Validate In-Reply-To matches our sent email ──
+        // ── GUARD 4: Validate reply belongs to a known client session ─────────
+        //
+        // STRATEGY (in order):
+        //   A) Direct match: inReplyTo == sentMessageId in DB  (ideal, new sessions)
+        //   B) Email fallback: sender has a recent APPROVED session (handles @LAPTOP bug
+        //      sessions and cases where Gmail rewrites Message-IDs)
+        //
+        // We do NOT hard-reject based on sentMessageId alone because:
+        //   - Old sessions had @LAPTOP fake IDs that don't match Gmail's real Message-ID
+        //   - Gmail sometimes rewrites Message-IDs for externally delivered mail
+        //
         boolean sentMessageIdTrackingActive = sessionRepository.countBySentMessageIdNotNull() > 0;
+        boolean validatedBySentMessageId    = false;
+        boolean validatedByEmailFallback    = false;
+
         if (sentMessageIdTrackingActive) {
-            boolean isReplyToOurEmail = sessionRepository.existsBySentMessageId(inReplyTo);
-            if (!isReplyToOurEmail) {
-                log.info("[GmailPoller] ⚠️ Skipping — In-Reply-To={} does not match any email WE sent. sender={} subject={}", inReplyTo, senderEmail, subject);
-                markAsSeen(message);
-                return;
-            }
-            log.debug("[GmailPoller] ✅ In-Reply-To validated against our sentMessageId. inReplyTo={}", inReplyTo);
-        } else {
+            validatedBySentMessageId = sessionRepository.existsBySentMessageId(inReplyTo);
+            log.debug("[GmailPoller] sentMessageId lookup — inReplyTo={} matched={}", inReplyTo, validatedBySentMessageId);
+        }
+
+        if (!validatedBySentMessageId) {
+            // Fallback: does sender have ANY recent APPROVED session (CAMPAIGN or CLIENT_REPLY)?
             Date validityCutoff = new Date(System.currentTimeMillis() - (campaignValidityDays * 24L * 60L * 60L * 1000L));
-            boolean hasRecentCampaign = sessionRepository
+
+            Optional<EmailApprovalSession> recentSession = sessionRepository
                     .findTopByClientEmailAndStatusAndSessionTypeOrNullOrderByLastUpdatedAtDesc(
                             senderEmail, "APPROVED", "CAMPAIGN")
-                    .filter(s -> s.getLastUpdatedAt() != null && s.getLastUpdatedAt().after(validityCutoff))
-                    .isPresent();
-            if (!hasRecentCampaign) {
-                log.info("[GmailPoller] ⚠️ Fallback check failed — No recent approved campaign (within {} days) for sender={}. Skipping.", campaignValidityDays, senderEmail);
-                markAsSeen(message);
-                return;
+                    .or(() -> sessionRepository
+                            .findTopByClientEmailAndStatusAndSessionTypeOrNullOrderByLastUpdatedAtDesc(
+                                    senderEmail, "APPROVED", "CLIENT_REPLY"));
+
+            if (recentSession.isPresent()) {
+                EmailApprovalSession s = recentSession.get();
+                boolean withinValidity = s.getLastUpdatedAt() != null
+                        && s.getLastUpdatedAt().after(validityCutoff);
+
+                if (withinValidity) {
+                    validatedByEmailFallback = true;
+                    log.info("[GmailPoller] ✅ Fallback validation passed — sender={} matched sessionId={} type={} sentMessageId='{}'",
+                            senderEmail, s.getSessionId(), s.getSessionType(), s.getSentMessageId());
+                    log.info("[GmailPoller] ℹ️  Note: inReplyTo='{}' did not match sentMessageId='{}' — " +
+                                    "likely @LAPTOP bug session or Gmail Message-ID rewrite. Proceeding via email fallback.",
+                            inReplyTo, s.getSentMessageId());
+                } else {
+                    log.info("[GmailPoller] ⚠️ Fallback failed — sender={} has APPROVED session but it's older than {} days. Skipping.",
+                            senderEmail, campaignValidityDays);
+                }
+            } else {
+                log.info("[GmailPoller] ⚠️ Fallback failed — sender={} has no recent APPROVED session. Not a known client. Skipping.",
+                        senderEmail);
             }
-            log.debug("[GmailPoller] ✅ Fallback: sender={} has recent approved campaign.", senderEmail);
+        } else {
+            log.info("[GmailPoller] ✅ Direct sentMessageId match — inReplyTo={} sender={}", inReplyTo, senderEmail);
+        }
+
+        if (!validatedBySentMessageId && !validatedByEmailFallback) {
+            markAsSeen(message);
+            return;
         }
 
         // ── GUARD 5: In-memory idempotency ────────────────────────────────────
@@ -192,28 +201,18 @@ public class GmailPollingService {
             return;
         }
 
-        // ── GUARD 7: NULL-SAFE session check ──────────────────────────────────
-        boolean hasSession = sessionRepository
-                .findTopByClientEmailAndStatusAndSessionTypeOrNullOrderByLastUpdatedAtDesc(
-                        senderEmail, "APPROVED", "CAMPAIGN")
-                .or(() -> sessionRepository
-                        .findTopByClientEmailAndStatusAndSessionTypeOrNullOrderByLastUpdatedAtDesc(
-                                senderEmail, "APPROVED", "CLIENT_REPLY"))
-                .isPresent();
-        if (!hasSession) {
-            log.info("[GmailPoller] No approved session for sender={}. Skipping — not a known client.", senderEmail);
-            markAsSeen(message);
-            return;
-        }
-
-        // ── All guards passed — extract body and hand off ─────────────────────
+        // ── All guards passed ─────────────────────────────────────────────────
         String replyBody    = extractTextBody(message);
         String strippedBody = stripQuotedText(replyBody);
         if (strippedBody == null || strippedBody.isBlank()) {
             log.warn("[GmailPoller] Empty body after stripping. Using full body. sender={}", senderEmail);
             strippedBody = replyBody != null ? replyBody : "(empty reply)";
         }
-        log.info("[GmailPoller] ✅ Client reply detected — sender={} subject={} messageId={}", senderEmail, subject, messageId);
+
+        log.info("[GmailPoller] ✅ Client reply accepted — sender={} subject={} messageId={} validatedBy={}",
+                senderEmail, subject, messageId,
+                validatedBySentMessageId ? "sentMessageId" : "emailFallback");
+
         clientReplyProcessorService.processClientReply(
                 senderEmail, subject, strippedBody, messageId, inReplyTo, references
         );
@@ -315,11 +314,16 @@ public class GmailPollingService {
         return null;
     }
 
+    /**
+     * Normalizes a Message-ID by preserving the full <...> bracket form.
+     * Strips surrounding whitespace only.
+     * Does NOT strip brackets — comparison in DB uses the bracketed form.
+     */
     private String normalizeMessageId(String raw) {
         if (raw == null) return null;
         String trimmed = raw.trim();
         int start = trimmed.indexOf('<');
-        int end = trimmed.indexOf('>');
+        int end   = trimmed.indexOf('>');
         if (start >= 0 && end > start) {
             return trimmed.substring(start, end + 1).trim();
         }

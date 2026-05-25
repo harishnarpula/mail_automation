@@ -8,6 +8,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.amazonaws.auth.AWSStaticCredentialsProvider;
 import com.amazonaws.auth.BasicAWSCredentials;
+import com.amazonaws.auth.DefaultAWSCredentialsProviderChain;
 import com.amazonaws.HttpMethod;
 import com.amazonaws.regions.Regions;
 import com.amazonaws.services.s3.AmazonS3;
@@ -21,6 +22,7 @@ import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Calendar;
+import org.springframework.util.StringUtils;
 
 @Slf4j
 @Service
@@ -29,24 +31,31 @@ public class S3Service {
     @Value("${aws.s3.bucket}")
     private String bucket;
 
-    @Value("${aws.s3.access-key}")
+    @Value("${aws.s3.access-key:}")
     private String accessKeyId;
 
-    @Value("${aws.s3.secret-key}")
+    @Value("${aws.s3.secret-key:}")
     private String secretKey;
 
     private AmazonS3 s3Client;
 
     @PostConstruct
     public void init() {
-        BasicAWSCredentials credentials = new BasicAWSCredentials(accessKeyId, secretKey);
+        AmazonS3ClientBuilder builder = AmazonS3ClientBuilder.standard()
+                .withRegion(Regions.AP_SOUTH_1);
 
-        s3Client = AmazonS3ClientBuilder.standard()
-                .withCredentials(new AWSStaticCredentialsProvider(credentials))
-                .withRegion(Regions.AP_SOUTH_1)
-                .build();
+        if (StringUtils.hasText(accessKeyId) && StringUtils.hasText(secretKey)) {
+            BasicAWSCredentials credentials = new BasicAWSCredentials(accessKeyId, secretKey);
+            builder = builder.withCredentials(new AWSStaticCredentialsProvider(credentials));
+            log.info("S3 initialized with static credentials bucket={} region=AP_SOUTH_1", bucket);
+        } else {
+            builder = builder.withCredentials(DefaultAWSCredentialsProviderChain.getInstance());
+            log.warn("AWS access key/secret not set; using default AWS credentials provider chain.");
+        }
 
-        log.info("S3 initialized bucket={} region=AP_SOUTH_1", bucket);
+        s3Client = builder.build();
+
+        log.info("S3 client ready bucket={} region=AP_SOUTH_1", bucket);
     }
 
     public String uploadFile(MultipartFile file, String s3Key) throws Exception {

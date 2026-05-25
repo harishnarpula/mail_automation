@@ -44,7 +44,7 @@ public class QdrantConfiguration {
             }
 
         } catch (Exception e) {
-            log.error("Failed to initialize Qdrant collection", e);
+            log.warn("Qdrant collection init skipped: {}", e.getMessage());
         }
     }
 }

@@ -5,6 +5,7 @@ import com.askoxy.emailautomation.entity.EmailApprovalSession;
 import com.askoxy.emailautomation.repository.EmailApprovalSessionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -19,6 +20,9 @@ public class ApprovalOrchestrationService {
     private final RegenerationService regenerationService;
     private final EmailDeliveryService emailDeliveryService;
     private final WhatsAppNotificationService whatsAppNotificationService;
+
+    @Value("${spring.ai.openai.api-key}")
+    private String openAiKey;
 
     /**
      * Called by WhatsAppWebhookController when admin sends any WhatsApp reply.
@@ -103,8 +107,15 @@ public class ApprovalOrchestrationService {
     }
 
     private void handleRejection(EmailApprovalSession session, String feedback) {
-        log.info("[Approval] REJECTED — sessionId={} sessionType={} attempt={} feedback={}",
+        log.info("[Rejection] START — sessionId={} sessionType={} attempt={} feedback='{}'",
                 session.getSessionId(), session.getSessionType(), session.getAttemptCount(), feedback);
+
+        log.info("[Rejection] Current subject='{}'", session.getCurrentSubject());
+        log.info("[Rejection] Current body (first 200 chars)='{}'",
+                session.getCurrentBody() != null
+                        ? session.getCurrentBody().substring(0, Math.min(200, session.getCurrentBody().length()))
+                        : "NULL");
+        log.info("[Rejection] Accumulated feedback so far='{}'", session.getAccumulatedFeedback());
 
         session.setAccumulatedFeedback(
                 accumulateFeedback(session.getAccumulatedFeedback(), session.getAttemptCount(), feedback));
@@ -112,14 +123,24 @@ public class ApprovalOrchestrationService {
         session.setAttemptCount(session.getAttemptCount() + 1);
         sessionRepository.save(session);
 
+        log.info("[Rejection] Session saved as REGENERATING — now calling RegenerationService.regenerate()");
+
         try {
+
+            log.info("[Regeneration] ENTRY — sessionId={} attemptCount={} fileId='{}'",
+                    session.getSessionId(), session.getAttemptCount(), session.getFileId());
+            log.info("[Regeneration] OpenAI key resolved (first 7 chars)='{}'",
+                    openAiKey != null && openAiKey.length() > 7 ? openAiKey.substring(0, 7) : "TOO_SHORT_OR_NULL");
+            log.info("[Regeneration] Accumulated feedback='{}'", session.getAccumulatedFeedback());
             GeneratedEmailDto revised = regenerationService.regenerate(session);
+
+            log.info("[Rejection] Regeneration SUCCESS — new subject='{}'", revised.getSubject());
+
             session.setCurrentSubject(revised.getSubject());
             session.setCurrentBody(revised.getBody());
             session.setStatus("PENDING_APPROVAL");
             sessionRepository.save(session);
 
-            // Use correct WhatsApp notification based on session type
             if ("CLIENT_REPLY".equals(session.getSessionType())) {
                 whatsAppNotificationService.sendReplyForApproval(session);
             } else {
@@ -127,7 +148,18 @@ public class ApprovalOrchestrationService {
             }
 
         } catch (Exception e) {
-            log.error("[Approval] Regeneration failed for session={}", session.getSessionId(), e);
+            log.error("[Rejection] Regeneration FAILED — sessionId={} exceptionClass={} message='{}'",
+                    session.getSessionId(), e.getClass().getName(), e.getMessage());
+            log.error("[Rejection] Full stack trace:", e);
+
+            // Dig into root cause — Spring AI wraps OpenAI errors
+            Throwable cause = e.getCause();
+            while (cause != null) {
+                log.error("[Rejection] Caused by: exceptionClass={} message='{}'",
+                        cause.getClass().getName(), cause.getMessage());
+                cause = cause.getCause();
+            }
+
             session.setStatus("REGENERATION_FAILED");
             sessionRepository.save(session);
             whatsAppNotificationService.sendRegenerationFailureAlert(session, e.getMessage());

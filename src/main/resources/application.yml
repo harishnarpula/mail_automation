@@ -95,9 +95,9 @@ radhaclone:
     username: siddushiva2699@gmail.com
     password: upzw endy nhuu htag
   qdrant:
-    host: ${QDRANT_HOST:localhost}
-    port: ${QDRANT_PORT:6334}
-    api-key: ${QDRANT_API_KEY:}
+    host: ${QDRANT_HOST}
+    port: ${QDRANT_PORT}
+    api-key: ${QDRANT_API_KEY}
     collection-name: askoxy_live
     use-tls: true
 
@@ -124,6 +124,6 @@ aws:
   s3:
     bucket: radha-clone
     region: ap-south-1
-    access-key: ${AWS_ACCESS_KEY_ID}
-    secret-key: ${AWS_SECRET_ACCESS_KEY}
+    access-key: ${AWS_ACCESS_KEY_ID:}
+    secret-key: ${AWS_SECRET_ACCESS_KEY:}
     presigned-url-expiry-days: 7

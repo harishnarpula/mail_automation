@@ -14,12 +14,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
-/**
- * Handles client replies in a continuous loop:
- * 1) immediate generation when no active pending approval exists
- * 2) queueing when a pending/re-generating session already exists
- * 3) scheduled draining of queued replies after pending session is resolved
- */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -40,7 +34,8 @@ public class ClientReplyProcessorService {
                                    String inReplyTo,
                                    String references) {
 
-        log.info("[ClientReplyProcessor] Processing reply from clientEmail={} subject={}", clientEmail, subject);
+        log.info("[ClientReplyProcessor] Received reply — clientEmail={} subject={} messageId={}",
+                clientEmail, subject, messageId);
 
         if (messageId != null && sessionRepository.existsByProcessedMessageId(messageId)) {
             log.warn("[ClientReplyProcessor] messageId={} already processed. Skipping.", messageId);
@@ -49,10 +44,12 @@ public class ClientReplyProcessorService {
 
         EmailApprovalSession lastApprovedSession = findLastApprovedSession(clientEmail);
         if (lastApprovedSession == null) {
-            log.warn("[ClientReplyProcessor] No approved session found for clientEmail={}. Cannot process reply.",
-                    clientEmail);
+            log.warn("[ClientReplyProcessor] No approved session for clientEmail={}. Skipping.", clientEmail);
             return;
         }
+
+        log.info("[ClientReplyProcessor] Found approved context sessionId={} type={}",
+                lastApprovedSession.getSessionId(), lastApprovedSession.getSessionType());
 
         boolean hasActivePendingSession = sessionRepository
                 .findTopByClientEmailAndStatusInOrderByCreatedAtDesc(
@@ -60,20 +57,26 @@ public class ClientReplyProcessorService {
                 .isPresent();
 
         if (hasActivePendingSession) {
+            log.info("[ClientReplyProcessor] Active pending session exists — queueing reply for clientEmail={}", clientEmail);
             queueClientReply(lastApprovedSession, subject, replyBody, messageId, inReplyTo);
             return;
         }
 
+        // Build session with ALL required fields set BEFORE generation
+        // CRITICAL: clientReplyContent must be set here — RegenerationService reads it on every feedback round
         EmailApprovalSession immediateSession = new EmailApprovalSession();
         immediateSession.setClientName(lastApprovedSession.getClientName());
         immediateSession.setClientEmail(clientEmail);
         immediateSession.setFileId(lastApprovedSession.getFileId());
         immediateSession.setSessionType("CLIENT_REPLY");
         immediateSession.setCurrentSubject(subject);
-        immediateSession.setClientReplyContent(replyBody);
+        immediateSession.setClientReplyContent(replyBody);   // ← MUST be set; used on every regen round
         immediateSession.setProcessedMessageId(messageId);
         immediateSession.setEmailThreadId(inReplyTo != null ? inReplyTo : messageId);
-        immediateSession.setStatus("REGENERATING"); // transient state during generation
+        immediateSession.setStatus("REGENERATING");
+
+        log.info("[ClientReplyProcessor] Creating immediate CLIENT_REPLY session — clientName='{}' replyLength={}",
+                lastApprovedSession.getClientName(), replyBody != null ? replyBody.length() : 0);
 
         generateReplyAndMoveToPendingApproval(immediateSession, lastApprovedSession, null);
     }
@@ -105,12 +108,15 @@ public class ClientReplyProcessorService {
 
         EmailApprovalSession lastApprovedSession = findLastApprovedSession(queued.getClientEmail());
         if (lastApprovedSession == null) {
-            log.warn("[ClientReplyProcessor] No approved context for queued session={} client={}. Expiring queued item.",
+            log.warn("[ClientReplyProcessor] No approved context for queued session={} client={}. Expiring.",
                     queued.getSessionId(), queued.getClientEmail());
             queued.setStatus("EXPIRED");
             sessionRepository.save(queued);
             return;
         }
+
+        log.info("[ClientReplyProcessor] Draining queued session={} for client={}",
+                queued.getSessionId(), queued.getClientEmail());
 
         generateReplyAndMoveToPendingApproval(queued, lastApprovedSession, queued.getAccumulatedFeedback());
     }
@@ -126,24 +132,27 @@ public class ClientReplyProcessorService {
         queued.setFileId(lastApprovedSession.getFileId());
         queued.setSessionType("CLIENT_REPLY");
         queued.setCurrentSubject(subject);
-        queued.setClientReplyContent(replyBody);
+        queued.setClientReplyContent(replyBody);             // ← preserved for when queue drains
         queued.setProcessedMessageId(messageId);
         queued.setEmailThreadId(inReplyTo != null ? inReplyTo : messageId);
         queued.setStatus("QUEUED");
 
         EmailApprovalSession saved = sessionRepository.save(queued);
-        log.info("[ClientReplyProcessor] Queued client reply session={} client={} messageId={}",
+        log.info("[ClientReplyProcessor] Queued CLIENT_REPLY session={} client={} messageId={}",
                 saved.getSessionId(), saved.getClientEmail(), messageId);
     }
 
     private void generateReplyAndMoveToPendingApproval(EmailApprovalSession targetSession,
                                                        EmailApprovalSession lastApprovedSession,
                                                        String feedbackHistory) {
-        String clientName = lastApprovedSession.getClientName();
-        String fileId = lastApprovedSession.getFileId();
+        String clientName        = lastApprovedSession.getClientName();
+        String fileId            = lastApprovedSession.getFileId();
         String clientReplyContent = targetSession.getClientReplyContent() != null
                 ? targetSession.getClientReplyContent()
                 : "(empty client reply)";
+
+        log.info("[ClientReplyProcessor] generateReply — clientName='{}' feedbackHistory='{}' replyLength={}",
+                clientName, feedbackHistory, clientReplyContent.length());
 
         String vectorStoreId = resolveVectorStoreId(fileId, lastApprovedSession);
         String companyContext = retrievalService.retrieve(
@@ -152,7 +161,9 @@ public class ClientReplyProcessorService {
 
         String originalSubject = lastApprovedSession.getCurrentSubject() != null
                 ? lastApprovedSession.getCurrentSubject()
-                : (targetSession.getCurrentSubject() != null ? targetSession.getCurrentSubject() : "Re: Conversation");
+                : (targetSession.getCurrentSubject() != null
+                   ? targetSession.getCurrentSubject()
+                   : "Re: Conversation");
 
         GeneratedEmailDto rawReply = replyGenerationAgent.generateReply(
                 clientName,
@@ -162,27 +173,40 @@ public class ClientReplyProcessorService {
                 feedbackHistory
         );
 
+        log.info("[ClientReplyProcessor] ReplyGenerationAgent done — subject='{}'", rawReply.getSubject());
+
         GeneratedEmailDto finalReply = complianceAgent.reviewAndRefine(rawReply, feedbackHistory, true);
 
+        // CRITICAL: preserve clientReplyContent on the saved session
+        // RegenerationService.regenerateReply() reads this field on EVERY feedback round
         targetSession.setClientName(clientName);
         targetSession.setClientEmail(lastApprovedSession.getClientEmail());
         targetSession.setCurrentSubject(finalReply.getSubject());
         targetSession.setCurrentBody(finalReply.getBody());
         targetSession.setFileId(fileId);
         targetSession.setSessionType("CLIENT_REPLY");
+        targetSession.setClientReplyContent(clientReplyContent); // ← re-set explicitly to survive regen rounds
         targetSession.setStatus("PENDING_APPROVAL");
 
         EmailApprovalSession savedSession = sessionRepository.save(targetSession);
-        log.info("[ClientReplyProcessor] Created CLIENT_REPLY session={} for client={}",
+        log.info("[ClientReplyProcessor] Saved PENDING_APPROVAL session={} client={}",
                 savedSession.getSessionId(), savedSession.getClientEmail());
 
         whatsAppNotificationService.sendReplyForApproval(savedSession);
     }
 
     /**
-     * Called by regeneration flow for CLIENT_REPLY sessions.
+     * Called by RegenerationService for CLIENT_REPLY sessions.
+     * NOT used in the feedback loop — RegenerationService.regenerateReply() handles that directly.
+     * Kept for any external callers.
      */
     public GeneratedEmailDto regenerateReply(EmailApprovalSession session, String vectorStoreId) {
+        String feedback = session.getAccumulatedFeedback() != null
+                ? session.getAccumulatedFeedback().trim() : "";
+
+        log.info("[ClientReplyProcessor] regenerateReply called — sessionId={} feedback='{}'",
+                session.getSessionId(), feedback);
+
         String companyContext = retrievalService.retrieve(
                 "company overview products services capabilities what we build what we offer",
                 vectorStoreId, 10);
@@ -192,10 +216,10 @@ public class ClientReplyProcessorService {
                 session.getClientReplyContent(),
                 session.getCurrentSubject(),
                 companyContext,
-                session.getAccumulatedFeedback()
+                feedback
         );
 
-        return complianceAgent.reviewAndRefine(rawReply, session.getAccumulatedFeedback(), true);
+        return complianceAgent.reviewAndRefine(rawReply, feedback, true);
     }
 
     private EmailApprovalSession findLastApprovedSession(String clientEmail) {

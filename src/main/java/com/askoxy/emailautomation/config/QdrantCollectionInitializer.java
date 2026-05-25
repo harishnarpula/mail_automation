@@ -2,27 +2,30 @@ package com.askoxy.emailautomation.config;
 
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
 import org.springframework.web.client.RestTemplate;
 
 import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
+@Slf4j
 public class QdrantCollectionInitializer {
 
     @Value("${useronboard.qdrant.host}")
     private String host;
 
-    @Value("${useronboard.qdrant.port}")
+    @Value("${useronboard.qdrant.port:6333}")
     private String port;
 
-    @Value("${useronboard.qdrant.api-key}")
+    @Value("${useronboard.qdrant.api-key:}")
     private String apiKey;
 
-    @Value("${useronboard.qdrant.collection-name}")
+    @Value("${useronboard.qdrant.collection-name:askoxycollection}")
     private String collectionName;
 
     private final RestTemplate restTemplate = new RestTemplate();
@@ -31,12 +34,18 @@ public class QdrantCollectionInitializer {
     public void initializeCollection() {
 
         try {
+            if (!StringUtils.hasText(host)) {
+                log.warn("Qdrant collection initializer skipped: host is empty");
+                return;
+            }
 
             String baseUrl =
-                    "https://" + host + ":6333";
+                    "https://" + host + ":" + port;
 
             HttpHeaders headers = new HttpHeaders();
-            headers.set("api-key", apiKey);
+            if (StringUtils.hasText(apiKey)) {
+                headers.set("api-key", apiKey);
+            }
             headers.setContentType(MediaType.APPLICATION_JSON);
 
             // 1. Create collection
@@ -62,14 +71,10 @@ public class QdrantCollectionInitializer {
                         String.class
                 );
 
-                System.out.println(
-                        "Qdrant collection created"
-                );
+                log.info("Qdrant collection created: {}", collectionName);
 
             } catch (Exception ignored) {
-                System.out.println(
-                        "Collection already exists"
-                );
+                log.debug("Qdrant collection may already exist: {}", collectionName);
             }
 
             // 2. Create vectorStoreId payload index
@@ -95,21 +100,14 @@ public class QdrantCollectionInitializer {
                         String.class
                 );
 
-                System.out.println(
-                        "vectorStoreId index created"
-                );
+                log.info("Qdrant index created: vectorStoreId");
 
             } catch (Exception ignored) {
-                System.out.println(
-                        "Index already exists"
-                );
+                log.debug("Qdrant index may already exist: vectorStoreId");
             }
 
         } catch (Exception e) {
-            throw new RuntimeException(
-                    "Failed to initialize Qdrant",
-                    e
-            );
+            log.warn("Qdrant initializer skipped due to connectivity/config issue: {}", e.getMessage());
         }
     }
 }
