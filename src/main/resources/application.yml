@@ -47,24 +47,22 @@ spring:
     anthropic:
       api-key: DISABLED
 
-    starttls:
-      required: true       # added — forces TLS on Railway
+     # added — forces TLS on Railway
     connectiontimeout: 5000
     timeout: 5000
     writetimeout: 5000
 
   mail:
     host: smtp.gmail.com
-    port: 587
+    port: 465
     username: venagantirishi@gmail.com
     password: ${GMAIL_APP_PASSWORD}
 
     properties:
       mail:
-        debug: true
         smtp:
           auth: true
-          starttls:
+          ssl:
             enable: true
           connectiontimeout: 10000
           timeout: 10000
