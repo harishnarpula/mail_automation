@@ -2,8 +2,8 @@ spring:
   application:
     name: askoxy-email-automation
 
-    jmx:
-      enabled: false
+  jmx:
+    enabled: false
 
   servlet:
     multipart:
@@ -47,11 +47,17 @@ spring:
     anthropic:
       api-key: DISABLED
 
+    starttls:
+      required: true       # added — forces TLS on Railway
+    connectiontimeout: 5000
+    timeout: 5000
+    writetimeout: 5000
+
   mail:
     host: smtp.gmail.com
     port: 587
     username: venagantirishi@gmail.com
-    password: usbo jtyu bbjp hjwr
+    password:   ${GMAIL_APP_PASSWORD}
     properties:
       mail:
         smtp:
@@ -64,7 +70,7 @@ app:
     imap:
       host: imap.gmail.com
       port: 993
-      password: sxzf mgbr sjqq cwcs
+      password: ${GMAIL_IMAP_PASSWORD}
     poll-interval-ms: 60000
     lookback-hours: 24
     campaign-validity-days: 7
@@ -97,7 +103,7 @@ app:
 ultramsg:
   instance-id: instance176023
   api-url: https://api.ultramsg.com/instance176023/messages/chat
-  token: 6jpsb7azyyu1cjwo
+  token: ${ULTRAMSG_TOKEN}
   admin-number: 919849257032
 
 useronboard:
