@@ -56,7 +56,7 @@ spring:
     host: smtp.gmail.com
     port: ${SPRING_MAIL_PORT}
     username: venagantirishi@gmail.com
-    password: ${GMAIL_APP_PASSWORD}
+    password: bptd hnds uwxu smmv
 
     properties:
       mail:
@@ -80,7 +80,7 @@ app:
       port: 993
       protocol: imaps
       username: venagantirishi@gmail.com
-      password: ${GMAIL_IMAP_PASSWORD}
+      password: bptd hnds uwxu smmv
       inbox-folder: INBOX
 
     poll-interval-ms: 60000
