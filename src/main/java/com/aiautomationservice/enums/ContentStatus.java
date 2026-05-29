@@ -1,2 +1,2 @@
 package com.aiautomationservice.enums;
-public enum ContentStatus { DRAFT, PENDING, APPROVED, REJECTED, PUBLISHED, FAILED }
+public enum ContentStatus { DRAFT, PENDING, PROCESSING, APPROVED, REJECTED, PUBLISHED, FAILED }

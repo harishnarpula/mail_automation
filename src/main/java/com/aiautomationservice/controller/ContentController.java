@@ -15,7 +15,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.MediaType;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-
+import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -232,8 +232,8 @@ public class ContentController {
 
     @PostMapping(value = "/paperclip/analyze", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ApiResponse<PaperclipResponse> analyzePaperclip(
-            @RequestPart("files") List<MultipartFile> files) {
-        return ApiResponse.success(contentService.analyzePaperclip(files));
+            @RequestPart("files") MultipartFile[] files) {
+        return ApiResponse.success(contentService.analyzePaperclip(Arrays.asList(files)));
     }
 
     @GetMapping("/paperclip/all")

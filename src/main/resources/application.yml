@@ -155,7 +155,9 @@ radhaclone:
 
 server:
   forward-headers-strategy: framework
-
+  tomcat:
+    max-swallow-size: -1
+    max-http-form-post-size: -1
 radha:
   email:
     from: siddushiva2699@gmail.com

@@ -13,7 +13,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
-
+import org.springframework.mock.web.MockMultipartFile;
+import org.springframework.scheduling.annotation.Async;
 import java.util.*;
 
 import com.aiautomationservice.repository.ContentItemRepository;
@@ -44,36 +45,68 @@ public class VideoService {
     @Transactional
     public VideoContent submit(MultipartFile videoFile) throws Exception {
 
+        // Save video to S3 — fast
         String storagePath = saveFile(videoFile);
-        VideoAnalysisResult analysis = geminiVideoService.analyzeVideo(videoFile);
 
+        // Save a stub to DB immediately with PROCESSING status
         VideoContent content = VideoContent.builder()
                 .videoId(UUID.randomUUID().toString())
                 .originalFileName(videoFile.getOriginalFilename())
                 .storagePath(storagePath)
                 .fileSizeBytes(videoFile.getSize())
-                .audioTranscript(analysis.getAudioTranscript())
-                .visualContent(analysis.getVisualContent())
-                .reasoningNotes(analysis.getReasoningNotes())
-                .reasonedContent(analysis.getReasonedContent())
-                .title(analysis.getTitle())
-                .summary(analysis.getSummary())
-                .intro(analysis.getIntro())
-                .body(analysis.getBody())
-                .closing(analysis.getClosing())
-                .approvedContent(
-                        analysis.getReasonedContent() != null
-                                ? analysis.getReasonedContent()
-                                : analysis.getDraftPost())
-                .status(ContentStatus.PENDING)
+                .status(ContentStatus.PROCESSING)
                 .addedToClone(false)
                 .blogPublished(false)
                 .socialPosted(false)
                 .build();
 
         videoContentRepository.save(content);
-        log.info("Video saved: videoId={}", content.getVideoId());
-        return content;
+        log.info("Video saved: videoId={} — AI analysis starting in background", content.getVideoId());
+
+        // Fire and forget — runs on radha-async- thread pool
+        analyzeVideoAsync(content.getVideoId(), videoFile.getBytes(),
+                videoFile.getOriginalFilename(), videoFile.getContentType());
+
+        return content; // responds in ~5 seconds
+    }
+
+    @Async
+    public void analyzeVideoAsync(String videoId, byte[] videoBytes,
+                                  String originalName, String contentType) {
+        try {
+            MockMultipartFile file = new MockMultipartFile(
+                    "videoFile", originalName, contentType, videoBytes);
+
+            VideoAnalysisResult analysis = geminiVideoService.analyzeVideo(file);
+
+            VideoContent content = videoContentRepository.findByVideoId(videoId)
+                    .orElseThrow(() -> new RuntimeException("Video not found: " + videoId));
+
+            content.setAudioTranscript(analysis.getAudioTranscript());
+            content.setVisualContent(analysis.getVisualContent());
+            content.setReasoningNotes(analysis.getReasoningNotes());
+            content.setReasonedContent(analysis.getReasonedContent());
+            content.setTitle(analysis.getTitle());
+            content.setSummary(analysis.getSummary());
+            content.setIntro(analysis.getIntro());
+            content.setBody(analysis.getBody());
+            content.setClosing(analysis.getClosing());
+            content.setApprovedContent(
+                    analysis.getReasonedContent() != null
+                            ? analysis.getReasonedContent()
+                            : analysis.getDraftPost());
+            content.setStatus(ContentStatus.PENDING);
+            videoContentRepository.save(content);
+
+            log.info("Video analysis complete: videoId={}", videoId);
+
+        } catch (Exception e) {
+            log.error("Video analysis FAILED: videoId={}", videoId, e);
+            videoContentRepository.findByVideoId(videoId).ifPresent(c -> {
+                c.setStatus(ContentStatus.FAILED);
+                videoContentRepository.save(c);
+            });
+        }
     }
 
     @Transactional
