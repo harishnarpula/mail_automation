@@ -32,34 +32,40 @@ public class ComplianceAgent {
                 You are a B2B email editor reviewing a reply email to an incoming client message.
 
                 Check and fix:
-                1. Reply must directly address the client's actual message (no generic template tone)
+                1. Reply must directly address the client's actual message — no generic template tone
                 2. Remove ANY generic openers ("I hope", "I wanted to reach out", "I am writing to")
-                3. Replace ANY placeholder like [Your Name], [Position] with "OXYGLOBAL.TECH"
-                4. Kill buzzwords: innovative, cutting-edge, seamlessly, leverage, synergy, transform
-                5. Ensure body is under 150 words
-                6. Ensure the email clearly says what WE do and what WE can BUILD for the client
-                7. Make sure there is exactly ONE clear low-friction CTA
-                8. Keep subject as a proper reply subject (must retain "Re:" context)
-                9. Tone: confident founder, not a salesperson
+                3. Replace ANY placeholder like [Your Name], [Position] with "Radhakrishna Thatavarti"
+                4. Remove all emojis from subject and body
+                5. Remove all bullet points — convert to flowing paragraphs
+                6. Kill buzzwords: innovative, cutting-edge, seamlessly, leverage, synergy, transform
+                7. Ensure the email clearly says what WE do and what WE can BUILD for the client
+                8. Make sure there is exactly ONE clear low-friction CTA
+                9. Keep subject as a proper reply subject (must retain "Re:" context)
+                10. Tone: formal, confident CEO writing to a senior executive
+
+                DO NOT shorten the email — preserve all content and sections.
 
                 Return ONLY valid JSON:
                 {"subject": "", "body": ""}
                 """
                 : """
-                You are a B2B email editor reviewing an outreach email written by our company
-                to attract a potential client to hire us.
-                
+                You are a B2B email editor reviewing a formal company introduction email written
+                by Radhakrishna Thatavarti (CEO, OXYGLOBAL TECHNOLOGIES) to a potential client.
+
                 Check and fix:
-                1. Remove ANY generic openers ("I hope", "I wanted to reach out", "I am writing to")
-                2. Replace ANY placeholder like [Your Name], [Position] with "OXYGLOBAL.TECH"
-                3. Kill buzzwords: innovative, cutting-edge, seamlessly, leverage, synergy, transform
-                4. Ensure body is under 150 words
-                5. Ensure the email clearly says what WE do and what WE can BUILD for the client
-                6. Make sure there is exactly ONE clear low-friction CTA
-                7. First sentence must be specific — who we are or what we do
-                8. Subject must be under 8 words and make them want to open it
-                9. Tone: confident founder, not a salesperson
-                
+                1. Remove ANY generic openers ("I hope", "I wanted to reach out")
+                2. Replace ANY placeholder like [Your Name], [Position] with "Radhakrishna Thatavarti"
+                3. Remove all emojis from subject and body
+                4. Remove all bullet points — convert to flowing paragraphs
+                5. Kill buzzwords: innovative, cutting-edge, seamlessly, leverage, synergy, transform
+                6. Ensure all four sections are present: 4P Ecosystem, BFSI Expertise, Leadership, Closing
+                7. Subject must be formal and under 10 words
+                8. Tone: formal CEO writing personally to a senior executive
+                9. Sign-off must be: Warm regards, / Radhakrishna Thatavarti / Founder & CEO / OXYGLOBAL TECHNOLOGIES / www.oxyglobal.tech
+
+                DO NOT shorten the email — this is a full introduction, not a cold pitch.
+                Preserve all sections and content. Only fix style and compliance issues.
+
                 Return ONLY valid JSON:
                 {"subject": "", "body": ""}
                 """;
@@ -67,18 +73,17 @@ public class ComplianceAgent {
         String systemPrompt = basePrompt
                 + (hasFeedback
                 ? "\nADMIN FEEDBACK IS MANDATORY. Treat it as strict requirements and highest priority."
-                + "\nIf any generic style rule conflicts with feedback, follow feedback."
+                  + "\nIf any generic style rule conflicts with feedback, follow feedback."
                 : "");
 
-        // Concatenation — not .formatted() — email body may contain % characters
         String userPrompt = "REVIEW THIS EMAIL:\n\nSubject: " + email.getSubject()
                 + "\n\nBody:\n" + email.getBody()
                 + (hasFeedback
                 ? "\n\nADMIN FEEDBACK TO ALSO ADDRESS:\n" + feedbackHistory
                 : "")
-                + "\n\nFix all issues. Return the improved version as JSON only.";
+                + "\n\nFix all issues. Preserve all content and sections. Return the improved version as JSON only.";
 
-        log.info("ComplianceAgent reviewing email");
+        log.info("[ComplianceAgent] Reviewing email — isReplyEmail={} hasFeedback={}", isReplyEmail, hasFeedback);
 
         String response = chatClient.prompt()
                 .system(systemPrompt)
@@ -97,8 +102,8 @@ public class ComplianceAgent {
                     .body(node.get("body").asText())
                     .build();
         } catch (Exception ex) {
-            log.warn("ComplianceAgent parse failed, returning original email", ex);
-            return email; // safe fallback
+            log.warn("[ComplianceAgent] Parse failed, returning original email", ex);
+            return email;
         }
     }
 }

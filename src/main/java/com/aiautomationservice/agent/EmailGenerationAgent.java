@@ -20,39 +20,60 @@ public class EmailGenerationAgent {
     private final ObjectMapper objectMapper;
 
     private static final String SYSTEM_PROMPT = """
-            You are writing a B2B outreach email on behalf of OUR company to a potential client.
+            You are writing a formal B2B introduction email on behalf of OXYGLOBAL TECHNOLOGIES,
+            sent personally by Radhakrishna Thatavarti (Founder & CEO) to a potential client or partner.
 
-            The goal of this email — as directed by our CEO — is to:
-            1. Introduce our company briefly and specifically
-            2. Showcase what we have built and what we can build for the client
-            3. Make the client want to hire us or explore working with us
-            4. Get a reply or a short call booked
+            This is NOT a short cold email. This is a full company introduction email —
+            structured, professional, and detailed — like a CEO personally writing to a
+            senior decision-maker.
 
-            EMAIL STRUCTURE — follow this exactly:
-            Hi [ClientFirstName],
+            ALL CONTENT MUST COME FROM THE COMPANY DOCUMENTS PROVIDED.
+            Do NOT invent, assume, or add any facts not present in the documents.
+            Every product name, platform name, figure, statistic, and capability must
+            be extracted directly from the retrieved company context.
 
-            [Line 1-2: Who we are and what we do — specific, not generic]
+            EMAIL STRUCTURE — follow this order exactly:
 
-            [Line 3-4: What we have built / what we can build or deliver for them]
+            1. GREETING:
+               Dear [ClientFirstName],
 
-            [Line 5: Why working with us makes sense — one concrete reason]
+            2. OPENING:
+               Greetings from Radhakrishna Thatavarti,
+               One sentence introducing the company — use the company description from the documents.
 
-            [Line 6: Single CTA — low friction, 15-min call or quick question]
+            3. SECTION HEADING: OUR CORE ECOSYSTEM
+               Write what the company does across its key pillars — use whatever structure
+               the documents describe (e.g. People, Platforms, Products, caPital or similar).
+               Each pillar gets its own paragraph. Use facts, names, and figures from the documents.
 
-            Warm regards,
-            OXYGLOBAL.TECH Team
-            sales@oxyglobaltech.xyz
+            4. SECTION HEADING: BFSI AND ENTERPRISE EXPERTISE
+               Write about the company's domain expertise — use only what is in the documents
+               (banking systems, industries served, client types, etc.)
+
+            5. SECTION HEADING: LEADERSHIP
+               Write about the founders and leadership team using only details from the documents.
+
+            6. CLOSING:
+               Express desire to meet, present a live demonstration, and explore collaboration.
+               Personalise this line to the client's name.
+
+            7. SIGN-OFF:
+               Warm regards,
+               Radhakrishna Thatavarti
+               Founder & CEO
+               OXYGLOBAL TECHNOLOGIES
+               www.oxyglobal.tech
 
             STRICT RULES:
-            - Max 150 words in body
-            - Use "we have", "we build", "we deliver" — not "I" statements
-            - Be specific — pull real facts from the company context
-            - NEVER use: innovative, cutting-edge, seamlessly, leverage, synergy, world-class
-            - NEVER use generic openers like "I hope this finds you well"
-            - NEVER write the sign-off inline with the last sentence — it must be on its own lines
-            - Subject line: specific, under 8 words, makes them want to open it
-            - Sound like a real founder, not a marketing template
-            - Each paragraph must be separated by a blank line (\\n\\n)
+            - NO emojis anywhere in the email
+            - NO bullet points — write in flowing paragraphs only
+            - NO hardcoded facts — every fact must come from the company context provided
+            - Formal business language — CEO writing to a senior executive
+            - Do NOT use: innovative, cutting-edge, seamlessly, leverage, synergy, world-class
+            - Do NOT use generic openers like "I hope this finds you well"
+            - Subject line: formal, specific, references what we do, under 10 words
+            - Each section separated by a blank line
+            - Client name must appear exactly as provided — do NOT alter it
 
             OUTPUT FORMAT — CRITICAL:
             - Your ENTIRE response must be a single JSON object
@@ -64,48 +85,62 @@ public class EmailGenerationAgent {
             """;
 
     private static final String BULK_SYSTEM_PROMPT = """
-            You are writing a B2B outreach email on behalf of OUR company to multiple potential clients.
+            You are writing a formal B2B introduction email on behalf of OXYGLOBAL TECHNOLOGIES,
+            sent personally by Radhakrishna Thatavarti (Founder & CEO) to multiple potential
+            clients or partners.
 
-            The goal of this email — as directed by our CEO — is to:
-            1. Introduce our company briefly and specifically
-            2. Showcase what we have built and what we can build for the client
-            3. Make the client want to hire us or explore working with us
-            4. Get a reply or a short call booked
+            This is NOT a short cold email. This is a full company introduction email —
+            structured, professional, and detailed.
 
-            EMAIL STRUCTURE — follow this exactly:
-            Hi {clientName},
+            ALL CONTENT MUST COME FROM THE COMPANY DOCUMENTS PROVIDED.
+            Do NOT invent, assume, or add any facts not present in the documents.
 
-            [Line 1-2: Who we are and what we do — specific, not generic]
+            EMAIL STRUCTURE — follow this order exactly:
 
-            [Line 3-4: What we have built / what we can build or deliver for them]
+            1. GREETING:
+               Dear {clientName},
 
-            [Line 5: Why working with us makes sense — one concrete reason]
+            2. OPENING:
+               Greetings from Radhakrishna Thatavarti,
+               One sentence introducing the company — use the company description from the documents.
 
-            [Line 6: Single CTA — low friction, 15-min call or quick question]
+            3. SECTION HEADING: OUR CORE ECOSYSTEM
+               Write what the company does across its key pillars using facts from the documents.
+               Each pillar gets its own paragraph.
 
-            Warm regards,
-            OXYGLOBAL.TECH Team
-            sales@oxyglobaltech.xyz
+            4. SECTION HEADING: BFSI AND ENTERPRISE EXPERTISE
+               Write about domain expertise using only what is in the documents.
+
+            5. SECTION HEADING: LEADERSHIP
+               Write about founders and leadership using only details from the documents.
+
+            6. CLOSING:
+               Express desire to meet, demonstrate, and collaborate.
+
+            7. SIGN-OFF:
+               Warm regards,
+               Radhakrishna Thatavarti
+               Founder & CEO
+               OXYGLOBAL TECHNOLOGIES
+               www.oxyglobal.tech
 
             PLACEHOLDER RULES — CRITICAL:
-            - You MUST use {clientName} wherever the client's first name appears
-            - You MUST use {clientCompany} wherever the client's company name appears
-            - These will be replaced with real values before sending — do NOT use actual names
+            - Use {clientName} wherever the client's first name appears
+            - Use {clientCompany} wherever the client's company appears
+            - Never use actual names — replaced at send time
 
             STRICT RULES:
-            - Max 150 words in body
-            - Use "we have", "we build", "we deliver" — not "I" statements
-            - Be specific — pull real facts from the company context
-            - NEVER use: innovative, cutting-edge, seamlessly, leverage, synergy, world-class
-            - NEVER use generic openers like "I hope this finds you well"
-            - NEVER write the sign-off inline with the last sentence — it must be on its own lines
-            - Each paragraph must be separated by a blank line (\\n\\n)
-            - Sound like a real founder, not a marketing template
+            - NO emojis anywhere in the email
+            - NO bullet points — write in flowing paragraphs only
+            - NO hardcoded facts — every fact must come from the company context provided
+            - Formal business language
+            - Do NOT use: innovative, cutting-edge, seamlessly, leverage, synergy, world-class
+            - Each section separated by a blank line
 
             OUTPUT FORMAT — CRITICAL:
             - Your ENTIRE response must be a single JSON object
             - No preamble, no explanation, no markdown fences
-            - Start your response with { and end with }
+            - Start with { and end with }
 
             REQUIRED JSON FORMAT:
             {"subject": "subject here", "body": "email body here"}
@@ -128,12 +163,14 @@ public class EmailGenerationAgent {
                 : SYSTEM_PROMPT;
 
         String userPrompt = "CLIENT NAME: " + clientName + "\n\n"
-                + "OUR COMPANY INTELLIGENCE:\n" + companyIntelligence + "\n\n"
+                + "COMPANY INTELLIGENCE (extracted from our documents):\n" + companyIntelligence + "\n\n"
                 + "EMAIL STRATEGY:\n" + strategy + "\n\n"
-                + "RAW COMPANY CONTEXT (use specific facts from here):\n" + retrievedContext + "\n\n"
-                + "Write the email now. Each paragraph separated by blank lines. Sign-off on its own line.";
+                + "RAW COMPANY CONTEXT — use ONLY facts from here, nothing else:\n" + retrievedContext + "\n\n"
+                + "Write the full introduction email now.\n"
+                + "Every product, platform, figure and capability must come from the context above.\n"
+                + "No emojis. No bullet points. Each section in its own paragraph.";
 
-        log.info("[EmailGenAgent] Generating single email for client={} hasFeedback={}", clientName, hasFeedback);
+        log.info("[EmailGenAgent] Generating introduction email for client={} hasFeedback={}", clientName, hasFeedback);
 
         String response = chatClient.prompt()
                 .system(systemPrompt)
@@ -150,11 +187,11 @@ public class EmailGenerationAgent {
                                                String intelligence,
                                                String strategy,
                                                String context) {
-        String userPrompt = "OUR COMPANY INTELLIGENCE:\n" + intelligence + "\n\n"
+        String userPrompt = "COMPANY INTELLIGENCE (extracted from our documents):\n" + intelligence + "\n\n"
                 + "EMAIL STRATEGY:\n" + strategy + "\n\n"
-                + "RAW COMPANY CONTEXT (use specific facts from here):\n" + context + "\n\n"
+                + "RAW COMPANY CONTEXT — use ONLY facts from here, nothing else:\n" + context + "\n\n"
                 + "REMINDER: Use {clientName} and {clientCompany} as placeholders — never real names.\n\n"
-                + "Write the bulk campaign email template now as a JSON object.";
+                + "Write the full introduction email template now. No emojis. No bullet points.";
 
         log.info("[EmailGenAgent] Generating bulk email template. previewClient={} company={}",
                 previewClientName, previewClientCompany);
@@ -171,7 +208,7 @@ public class EmailGenerationAgent {
 
         if (!result.getBody().contains("{clientName}")) {
             log.warn("[EmailGenAgent] AI did not use {{clientName}} placeholder — forcing it in greeting.");
-            String fixedBody = "Hi {clientName},\n\n" + result.getBody();
+            String fixedBody = "Dear {clientName},\n\n" + result.getBody();
             result = GeneratedEmailDto.builder()
                     .subject(result.getSubject())
                     .body(fixedBody)
@@ -212,7 +249,7 @@ public class EmailGenerationAgent {
 
         log.error("[EmailGenAgent] Could not parse JSON for client={}. Raw: {}", clientName, response);
         return GeneratedEmailDto.builder()
-                .subject("Introduction from our team — " + clientName)
+                .subject("Introduction from OXYGLOBAL TECHNOLOGIES")
                 .body(response.trim())
                 .build();
     }

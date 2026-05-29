@@ -23,7 +23,6 @@ spring:
   ai:
     openai:
       api-key: ${OPENAI_API_KEY}
-
       chat:
         options:
           model: gpt-4o
@@ -48,18 +47,20 @@ spring:
     anthropic:
       api-key: DISABLED
 
-     # added — forces TLS on Railway
-
+      # added — forces TLS on Railway
+    connectiontimeout: 5000
+    timeout: 5000
+    writetimeout: 5000
 
   mail:
     host: smtp.gmail.com
-    port: 987
+    port: 587
     username: venagantirishi@gmail.com
     password: bptd hnds uwxu smmv
 
     properties:
       mail:
-
+        debug: true
 
         smtp:
           auth: true
@@ -115,8 +116,8 @@ app:
 ultramsg:
   instance-id: instance176023
   api-url: https://api.ultramsg.com/instance176023/messages/chat
-  token: ${ULTRAMSG_TOKEN}
-  admin-number: 919849257032
+  token: 6jpsb7azyyu1cjwo
+  admin-number: 919347967774
 
 sanjana-ultramsg:
   instance-id: instance167980
@@ -124,12 +125,10 @@ sanjana-ultramsg:
   base-url: https://api.ultramsg.com/instance167980/
   team-group-id: 120363428292412044@g.us
 
-
-
 useronboard:
   mail:
     host: ${spring.mail.host}
-    port: ${spring.mail.port}
+    port: 587
     username: ${spring.mail.username}
     password: ${spring.mail.password}
   qdrant:
@@ -157,16 +156,10 @@ radhaclone:
 server:
   forward-headers-strategy: framework
 
-
-
-
 radha:
   email:
-    # OLD
-    from: sanjanakuhite3@gmail.com
-    to: sanjanakuhite3@gmail.com
-
-
+    from: siddushiva2699@gmail.com
+    to: bsudheesh123@gmail.com
   n8n:
     enabled: true
     webhook-base-url: https://siddushiva.app.n8n.cloud/webhook
@@ -184,13 +177,15 @@ logging:
   level:
     root: INFO
 
-    com.askoxy.emailautomation.service.GmailPollingService: DEBUG
-    com.askoxy.emailautomation.service.ClientReplyProcessorService: DEBUG
+    com.aiautomationservice.service.GmailPollingService: INFO
+    com.aiautomationservice.service.ClientReplyProcessorService: INFO
 
-    org.springframework.scheduling: INFO
+    org.springframework.scheduling: WARN
 
-    org.springframework.mail: DEBUG
-    org.eclipse.angus.mail: DEBUG
+    org.springframework.mail: WARN
+    org.eclipse.angus.mail: WARN
+    org.eclipse.angus.mail.imap: WARN
+    org.eclipse.angus.mail.imap.connectionpool: WARN
 
   file:
     name: logs/mail-automation.log
