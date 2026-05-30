@@ -43,7 +43,14 @@ public class WebhookAsyncHandler {
             // ── Count ACCEPTED questions (assistant msgs containing a question marker)
             // This is robust to re-ask loops: re-ask messages have no marker,
             // so they don't advance the question counter.
-            long acceptedQCount = historyBefore.stream()
+            //
+            // IMPORTANT: We only count from the START OF THE CURRENT SESSION.
+            // The current session starts from the last assistant message that
+            // contains "1️⃣" (Q1 welcome). This prevents stale old history from
+            // a previous completed flow inflating the counter.
+            List<ConversationMessage> sessionHistory = currentSessionHistory(historyBefore);
+
+            long acceptedQCount = sessionHistory.stream()
                     .filter(m -> "assistant".equals(m.getRole()))
                     .filter(m -> m.getContent() != null &&
                             (m.getContent().contains(MARKER_Q2) ||
@@ -52,7 +59,10 @@ public class WebhookAsyncHandler {
                     .count();
 
             // Check if flow already completed (thank-you was sent)
-            boolean alreadyCompleted = historyBefore.stream()
+            // NOTE: if this is the very first user reply (isFirstReply=true),
+            // the history only has the Q1 welcome message — there can be no
+            // completed flow yet, so skip this check entirely.
+            boolean alreadyCompleted = !isFirstReply && sessionHistory.stream()
                     .filter(m -> "assistant".equals(m.getRole()))
                     .anyMatch(m -> m.getContent() != null &&
                             m.getContent().contains(MARKER_THANKYOU));
@@ -496,11 +506,11 @@ public class WebhookAsyncHandler {
 
     private String buildNotification1(String phone, String firstReply) {
         return String.format(
-                "👋 *New Active Lead*\n" +
-                        "━━━━━━━━━━━━━━━━━━━━\n" +
-                        "📱 *Phone:*        +%s\n" +
-                        "💬 *First Reply:*  _%s_\n\n" +
-                        "🤖 AI onboarding flow has been initiated.", phone, firstReply);
+                "*New Active Lead*\n" +
+                        "------------------------------\n" +
+                        "*Phone:*\t\t+%s\n" +
+                        "*First Reply:*\t_%s_\n\n" +
+                        "AI onboarding flow has been initiated.", phone, firstReply);
     }
 
     /**
@@ -545,16 +555,16 @@ public class WebhookAsyncHandler {
                 country, course, score, intake);
 
         return String.format(
-                "🏆 *Qualified Lead — Action Required*\n" +
-                        "━━━━━━━━━━━━━━━━━━━━\n" +
-                        "📱 *Phone:*    +%s\n" +
-                        "🌍 *Country:*  %s\n" +
-                        "📚 *Course:*   %s\n" +
-                        "📝 *Score:*    %s\n" +
-                        "📅 *Intake:*   %s\n" +
-                        "━━━━━━━━━━━━━━━━━━━━\n" +
-                        "✅ *Status:* Qualified Lead\n\n" +
-                        "📞 *Please contact this lead at the earliest opportunity.* 🚀",
+                "*Qualified Lead!*\n" +
+                        "------------------------------\n" +
+                        "*Phone:*\t\t+%s\n" +
+                        "*Country:*\t%s\n" +
+                        "*Course:*\t\t%s\n" +
+                        "*Score:*\t\t%s\n" +
+                        "*Intake:*\t\t%s\n" +
+                        "------------------------------\n" +
+                        "*Status:*\t\tQualified Lead\n\n" +
+                        "*Please contact this lead at the earliest opportunity.*",
                 phone, country, course, score, intake
         );
     }
@@ -594,6 +604,34 @@ public class WebhookAsyncHandler {
     }
 
     // ── DB helpers ────────────────────────────────────────────────────────────
+
+    /**
+     * Returns only the messages belonging to the CURRENT onboarding session.
+     *
+     * Scans the full history backwards to find the last assistant message
+     * containing "1️⃣" (the Q1 welcome sent by LeadService). Everything from
+     * that point onward is the current session.
+     *
+     * This prevents stale messages from a previous completed flow (including
+     * old MARKER_THANKYOU entries) from interfering with acceptedQCount or
+     * alreadyCompleted checks when a lead is re-registered.
+     *
+     * If no Q1 marker is found, returns the full history unchanged (safe default).
+     */
+    private List<ConversationMessage> currentSessionHistory(List<ConversationMessage> fullHistory) {
+        int q1Index = -1;
+        for (int i = fullHistory.size() - 1; i >= 0; i--) {
+            ConversationMessage msg = fullHistory.get(i);
+            if ("assistant".equals(msg.getRole()) &&
+                    msg.getContent() != null &&
+                    msg.getContent().contains("1️⃣")) {
+                q1Index = i;
+                break;
+            }
+        }
+        if (q1Index == -1) return fullHistory;
+        return fullHistory.subList(q1Index, fullHistory.size());
+    }
 
     private void saveMessage(String phone, String role, String content) {
         conversationRepo.save(ConversationMessage.builder()
