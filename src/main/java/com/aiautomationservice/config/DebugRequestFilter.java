@@ -32,6 +32,12 @@ public class DebugRequestFilter implements Filter {
         HttpServletRequest req = (HttpServletRequest) request;
         HttpServletResponse res = (HttpServletResponse) response;
 
+        // Skip filter for file uploads — multipart/form-data breaks body caching
+        if (req.getContentType() != null && req.getContentType().contains("multipart/form-data")) {
+            chain.doFilter(request, response);
+            return;
+        }
+
         // Cache the body so it can be read multiple times
         CachedBodyHttpServletRequest cached = new CachedBodyHttpServletRequest(req);
 

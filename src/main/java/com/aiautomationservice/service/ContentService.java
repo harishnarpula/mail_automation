@@ -237,13 +237,12 @@ public class ContentService {
         if (req.getVoiceFile() != null && !req.getVoiceFile().isEmpty()) {
             log.info("Transcribing voice file");
             voiceInput = normalizeText(aiService.transcribe(req.getVoiceFile()));
-            log.info("VOICE TRANSCRIPT:\n{}", voiceInput);
+
         }
 
         String fileInput = "";
         if (req.getAttachment() != null && !req.getAttachment().isEmpty()) {
             fileInput = smartSummarizeFile(req.getAttachment());
-            log.info("FILE SUMMARY:\n{}", fileInput);
         }
 
         String imageUrl = null;
@@ -270,7 +269,6 @@ public class ContentService {
                 .collect(Collectors.joining("\n\n"))
                 .trim();
 
-        log.info("FINAL INPUT:\n{}", finalInstruction);
 
         String rawInstructionForStorage = !textInput.isEmpty() ? textInput
                 : !voiceInput.isEmpty() ? voiceInput

@@ -130,4 +130,15 @@ public class S3Service {
 
         return s3Key;
     }
+
+    public byte[] downloadBytes(String s3Key) {
+        try {
+            com.amazonaws.services.s3.model.S3Object object = s3Client.getObject(bucket, s3Key);
+            try (java.io.InputStream is = object.getObjectContent()) {
+                return is.readAllBytes();
+            }
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to download from S3: " + s3Key, e);
+        }
+    }
 }

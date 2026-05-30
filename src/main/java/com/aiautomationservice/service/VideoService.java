@@ -64,16 +64,17 @@ public class VideoService {
         log.info("Video saved: videoId={} — AI analysis starting in background", content.getVideoId());
 
         // Fire and forget — runs on radha-async- thread pool
-        analyzeVideoAsync(content.getVideoId(), videoFile.getBytes(),
+        analyzeVideoAsync(content.getVideoId(), storagePath,
                 videoFile.getOriginalFilename(), videoFile.getContentType());
 
         return content; // responds in ~5 seconds
     }
 
     @Async
-    public void analyzeVideoAsync(String videoId, byte[] videoBytes,
+    public void analyzeVideoAsync(String videoId, String s3Key,
                                   String originalName, String contentType) {
         try {
+            byte[] videoBytes = s3Service.downloadBytes(s3Key);
             MockMultipartFile file = new MockMultipartFile(
                     "videoFile", originalName, contentType, videoBytes);
 
