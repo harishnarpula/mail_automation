@@ -858,10 +858,14 @@ IMPORTANT:
         paperclipRepository.save(item);
 
         log.info("Paperclip saved: {}", item.getPaperclipId());
+        List<String> signedUrls = generateSignedUrls(s3FileUrl);
+
         return PaperclipResponse.builder()
                 .paperclipId(item.getPaperclipId())
                 .fileName(item.getFileName())
                 .s3FileUrl(item.getS3FileUrl())
+                .imageUrl(signedUrls.isEmpty() ? null : signedUrls.get(0))
+                .imageUrls(signedUrls)
                 .uploadedAt(item.getCreatedAt() != null ? item.getCreatedAt().toString() : null)
                 .analysis(result)
                 .build();
@@ -1198,11 +1202,15 @@ IMPORTANT:
                                         item.getAnalysisJson(),
                                         PaperclipAnalysisResult.class
                                 );
+                        List<String> signedUrls = generateSignedUrls(item.getS3FileUrl());
+
                         return PaperclipResponse.builder()
                                 .paperclipId(item.getPaperclipId())
-                                .fileName(item.getFileName())             // ← ADD
-                                .s3FileUrl(item.getS3FileUrl())           // ← ADD
-                                .uploadedAt(item.getCreatedAt().toString()) // ← ADD
+                                .fileName(item.getFileName())
+                                .s3FileUrl(item.getS3FileUrl())
+                                .imageUrl(signedUrls.isEmpty() ? null : signedUrls.get(0))
+                                .imageUrls(signedUrls)
+                                .uploadedAt(item.getCreatedAt().toString())
                                 .analysis(analysis)
                                 .build();
                     } catch (Exception ex) {
@@ -1214,5 +1222,20 @@ IMPORTANT:
                 .toList();
     }
 
+    private List<String> generateSignedUrls(String s3FileUrl) {
+        List<String> signedUrls = new ArrayList<>();
+        if (s3FileUrl == null || s3FileUrl.isBlank()) return signedUrls;
+        for (String key : s3FileUrl.split(",")) {
+            String trimmed = key.trim();
+            if (!trimmed.isBlank()) {
+                try {
+                    signedUrls.add(s3Service.generatePresignedUrl(trimmed));
+                } catch (Exception ex) {
+                    log.warn("Presign failed for key: {}", trimmed);
+                }
+            }
+        }
+        return signedUrls;
+    }
 
 }
