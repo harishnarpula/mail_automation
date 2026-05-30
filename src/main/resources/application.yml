@@ -14,6 +14,12 @@ spring:
     url: jdbc:postgresql://dpg-d8470ofaqgkc73adpk6g-a.oregon-postgres.render.com:5432/radha_ai
     username: radha_ai_user
     password: vKfXPbeFasUD1PwLSmwQDAPTpka0kTX1
+#  datasource:
+#    url: jdbc:postgresql://localhost:5432/radha_ai
+#    username: postgres
+#    password: 1234
+#    driver-class-name: org.postgresql.Driver
+
   jpa:
     hibernate:
       ddl-auto: update

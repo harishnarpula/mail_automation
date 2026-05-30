@@ -91,31 +91,31 @@ public class LeadService {
     }
 
     private String buildTeamNotification(LeadRequest lead) {
-        String organic = "true".equalsIgnoreCase(lead.getIsOrganic()) ? "Organic ✅" : "Paid 💰";
-        String row     = lead.getRowNumber() != null ? "#" + lead.getRowNumber() : "N/A";
-        String date    = formatDate(nvl(lead.getCreatedTime(), ""));
+        String organic    = "true".equalsIgnoreCase(lead.getIsOrganic()) ? "Organic" : "Paid";
+        String campaignId = lead.getRowNumber() != null ? "#" + lead.getRowNumber() : "N/A";
+        String date       = formatDate(nvl(lead.getCreatedTime(), ""));
 
         return String.format(
-                "🔔 *New Lead!*%n" +
-                        "━━━━━━━━━━━━━━━━━━━━%n" +
-                        "👤 *Name:*     %s%n" +
-                        "🏙️ *City:*     %s%n" +
-                        "📱 *Phone:*    %s%n" +
-                        "📧 *Email:*    %s%n" +
-                        "━━━━━━━━━━━━━━━━━━━━%n" +
-                        "🛒 *Product:*  %s%n" +
-                        "📣 *Source:*   %s%n" +
-                        "💰 *Type:*     %s%n" +
-                        "━━━━━━━━━━━━━━━━━━━━%n" +
-                        "🗂️ *Row:* %s  |  ⏰ %s%n%n" +
-                        "✈️ AI onboarding started!",
+                "*New Lead!*%n" +
+                        "------------------------------%n" +
+                        "*Name:*\t\t%s%n" +
+                        "*City:*\t\t%s%n" +
+                        "*Phone:*\t\t%s%n" +
+                        "*Email:*\t\t%s%n" +
+                        "------------------------------%n" +
+                        "*Product:*\t%s%n" +
+                        "*Source:*\t\t%s%n" +
+                        "*Type:*\t\t%s%n" +
+                        "------------------------------%n" +
+                        "*Campaign ID:* %s  |  %s%n%n" +
+                        "AI onboarding started!",
                 nvl(lead.getName(),    "N/A"),
                 nvl(lead.getCity(),    "N/A"),
                 nvl(lead.getPhone(),   "N/A"),
                 nvl(lead.getEmail(),   "N/A"),
                 nvl(lead.getProduct(), "N/A"),
                 nvl(lead.getSource(),  "N/A"),
-                organic, row, date
+                organic, campaignId, date
         );
     }
 
