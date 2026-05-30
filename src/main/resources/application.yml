@@ -37,11 +37,6 @@ spring:
       embedding:
         options:
           model: text-embedding-3-small
-    ollama:
-      chat:
-        enabled: false
-      embedding:
-        enabled: false
     vectorstore:
       qdrant:
         host: ${QDRANT_HOST}
@@ -50,9 +45,6 @@ spring:
         collection-name: askoxycollection
         initialize-schema: true
         use-tls: true
-    anthropic:
-      api-key: DISABLED
-
       # added — forces TLS on Railway
     connectiontimeout: 5000
     timeout: 5000
