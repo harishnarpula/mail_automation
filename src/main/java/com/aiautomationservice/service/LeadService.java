@@ -17,13 +17,15 @@ public class LeadService {
     private final UltraMsgService ultraMsgService;
     private final GmailService gmailService;
     private final ProcessedLeadRepository processedLeadRepo;
+    private final LeadEmailService leadEmailService;
 
     public LeadService(UltraMsgService ultraMsgService,
-                       GmailService gmailService,
+                       GmailService gmailService,LeadEmailService leadEmailService,
                        ProcessedLeadRepository processedLeadRepo) {
         this.ultraMsgService   = ultraMsgService;
         this.gmailService      = gmailService;
         this.processedLeadRepo = processedLeadRepo;
+        this.leadEmailService=leadEmailService;
     }
 
     public void processLead(LeadRequest lead) {
@@ -69,7 +71,7 @@ public class LeadService {
         }
         try {
             String subject = "Your Study Abroad Journey Starts Here! 🌍 — AskOxy";
-            gmailService.sendToLead(lead.getEmail(), subject, buildThankYouEmailContent(lead));
+            leadEmailService.sendToLead(lead.getEmail(), subject, buildThankYouEmailContent(lead));
             log.info("[LeadService] Thank-you email sent to: {}", lead.getEmail());
         } catch (Exception ex) {
             log.warn("[LeadService] Email failed for {}: {}", lead.getName(), ex.getMessage());
