@@ -104,11 +104,6 @@ public class LeadService {
                         "*City:*\t\t%s%n" +
                         "*Phone:*\t\t%s%n" +
                         "*Email:*\t\t%s%n" +
-                        "------------------------------%n" +
-                        "*Product:*\t%s%n" +
-                        "*Source:*\t\t%s%n" +
-                        "*Type:*\t\t%s%n" +
-                        "------------------------------%n" +
                         "*Campaign ID:* %s  |  %s%n%n" +
                         "AI onboarding started!",
                 nvl(lead.getName(),    "N/A"),
